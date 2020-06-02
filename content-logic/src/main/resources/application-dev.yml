@@ -1,0 +1,39 @@
+# ===================================================================
+# Standard Spring Boot properties.
+# Full reference is available at:
+# https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#common-application-properties
+# ===================================================================
+
+#logging:
+#  level:
+#    org:
+#      springframework:
+#        boot:
+#          autoconfigure: DEBUG
+
+spring:
+  jmx:
+    enabled: true
+  profiles:
+    active: dev
+
+elasticsearch:
+  host: localhost
+  port: 4571
+  region: eu-west-1
+  service-name: es
+
+amazon:
+  dynamodb:
+    region: eu-west-1
+    endpoint: http://localhost:4569
+  aws:
+    accesskey: testkey
+    secretkey: testsecret
+
+cloud:
+  aws:
+    region:
+      static: eu-west-1
+
+contentsTableName: contents-table

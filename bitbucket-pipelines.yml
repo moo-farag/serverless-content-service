@@ -1,0 +1,149 @@
+definitions:
+  caches:
+    terraform: ops/.terraform/plugins
+  services:
+    localstack:
+      image: localstack/localstack
+      environment:
+        SERVICES: dynamodb:4569,kinesis:4568,dynamodbstreams:4570,elasticsearch:4571
+        LOCALSTACK_HOSTNAME: localhost
+        HOSTNAME: localhost
+      ports:
+        - "4567-4597:4567-4597"
+        - "8081:8081"
+
+common: &COMMON
+  image: hashicorp/terraform:light
+  caches:
+    - terraform
+
+maven: &MAVEN
+  image: maven:3.6-jdk-8-slim
+  caches:
+    - maven
+
+test_step: &TEST_STEP
+  <<: *COMMON
+  name: Test
+  script:
+    - cd ops
+    - export TF_VAR_environment=staging
+    - terraform init -backend-config="role_arn=$TF_VAR_role_arn" -input=false -upgrade=true
+    - terraform plan -input=false
+
+unit_tests: &UNIT_TESTS
+  <<: *MAVEN
+  name: Unit Tests
+  script:
+    - echo "Executing unit tests"
+    - cp .env.sample .env
+    - mvn test
+  services:
+    - localstack
+
+mvn_assembly: &MVN_ASSEMBLY
+  <<: *MAVEN
+  name: Maven Assemble zip
+  script:
+    - echo "Assembling lambda zip"
+    - rm -rf content-logic/target/
+    - rm -rf content-triggers/target/
+    - mvn clean package
+  artifacts:
+    - content-logic/target/**
+    - content-triggers/target/**
+  services:
+    - localstack
+
+#TODO: Handle prod profile
+mvn_assembly_prod: &MVN_ASSEMBLY_PROD
+  <<: *MAVEN
+  name: Maven Assemble prod zip
+  script:
+    - echo "Assembling production lambda zip"
+    - rm -rf content-logic/target/
+    - rm -rf content-triggers/target/
+    - mvn clean package
+  artifacts:
+    - content-logic/target/**
+    - content-triggers/target/**
+  services:
+    - localstack
+
+pipelines:
+  default:
+    - step:
+        <<: *UNIT_TESTS
+    - step:
+        <<: *MVN_ASSEMBLY
+    - step:
+        <<: *TEST_STEP
+
+  branches:
+    develop:
+      - step:
+          <<: *UNIT_TESTS
+      - step:
+          <<: *MVN_ASSEMBLY
+      - step:
+          <<: *TEST_STEP
+      - step:
+          <<: *COMMON
+          name: Prepare
+          script:
+            - cd ops
+            - export TF_VAR_environment=staging
+            - terraform init -backend-config="role_arn=$TF_VAR_role_arn" -input=false -upgrade=true
+            - terraform workspace list | grep -q staging && echo 'found' || terraform workspace new staging
+            - terraform workspace select staging
+            - mkdir -p ../target
+            - terraform plan -input=false -out=../target/staging.tfp
+          artifacts:
+            - target/**
+      - step:
+          <<: *COMMON
+          name: Deploy to Staging
+          deployment: staging
+          trigger: manual
+          max-time: 90
+          script:
+            - cd ops
+            - terraform init -backend-config="role_arn=$TF_VAR_role_arn" -input=false -upgrade=true
+            - terraform workspace list | grep -q staging && echo 'found' || terraform workspace new staging
+            - terraform workspace select staging
+            - mkdir -p ../target
+            - terraform apply -auto-approve ../target/staging.tfp
+
+    master:
+      - step:
+          <<: *UNIT_TESTS
+      - step:
+          <<: *MVN_ASSEMBLY
+      - step:
+          <<: *TEST_STEP
+      - step:
+          <<: *COMMON
+          name: Prepare
+          script:
+            - cd ops
+            - export TF_VAR_environment=production
+            - terraform init -input=false -upgrade=true
+            - terraform workspace list | grep -q production && echo 'found' || terraform workspace new production
+            - terraform workspace select production
+            - mkdir -p ../target
+            - terraform plan -input=false -out=../target/production.tfp
+          artifacts:
+            - target/**
+      - step:
+          <<: *COMMON
+          name: Deploy to Production
+          deployment: production
+          trigger: manual
+          max-time: 90
+          script:
+            - cd ops
+            - terraform init -input=false -upgrade=true
+            - terraform workspace list | grep -q production && echo 'found' || terraform workspace new production
+            - terraform workspace select production
+            - mkdir -p ../target
+            - terraform apply -auto-approve ../target/production.tfp

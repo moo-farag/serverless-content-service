@@ -1,0 +1,16 @@
+# ===================================================================
+# Standard Spring Boot properties.
+# Full reference is available at:
+# https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#common-application-properties
+# ===================================================================
+
+spring:
+  jmx:
+    enabled: true
+  profiles:
+    active: dev
+
+cloud:
+  aws:
+    region:
+      static: eu-west-1

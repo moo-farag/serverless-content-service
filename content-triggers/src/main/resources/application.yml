@@ -1,0 +1,38 @@
+# ===================================================================
+# Standard Spring Boot properties.
+# Full reference is available at:
+# https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#common-application-properties
+# ===================================================================
+
+
+log:
+  level:
+    root: INFO
+
+spring:
+  main:
+    banner-mode: 'off'
+  jmx:
+    enabled: true
+  cloud:
+    stream:
+      bindings:
+        contentsOut:
+          destination: contents-stream-staging
+          content-type: application/json
+          producer:
+            partitionKeyExpression: "1"
+        contentsIn:
+          destination: contents-stream-staging
+          content-type: application/json
+  application:
+    name: ContentTriggerApplication
+
+cloud:
+  aws:
+    credentials:
+      useDefaultAwsCredentialsChain: true
+    region:
+      static: ${AWS_REGION}
+
+originator: ContentTriggerProducer
